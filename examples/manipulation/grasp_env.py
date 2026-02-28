@@ -319,7 +319,7 @@ class GraspEnv:
         )
         return keypoint_offsets[None].repeat((batch_size, 1, 1))
 
-    def grasp_and_lift_demo(self) -> None:
+    def grasp_and_lift_demo(self, record: bool = False, vis_cam=None) -> None:
         total_steps = 500
         goal_pose = self.robot.ee_pose.clone()
         # lift pose (above the object)
@@ -343,6 +343,9 @@ class GraspEnv:
             else:  # reset
                 self.robot.go_to_goal(reset_pose, open_gripper=True)
             self.scene.step()
+            # Record frames during demo if requested
+            if record and vis_cam is not None:
+                vis_cam.render()
 
 
 ## ------------ robot ----------------

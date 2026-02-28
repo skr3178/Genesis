@@ -1,0 +1,108 @@
+import math
+import numpy as np
+import genesis as gs
+import torch
+
+
+########################## init ##########################
+gs.init(seed=0, precision='32', logging_level='info')
+
+########################## create a scene ##########################
+scene = gs.Scene(
+    sim_options=gs.options.SimOptions(
+        substeps=10,
+        gravity=(0, 0, -9.8),
+    ),
+    viewer_options=gs.options.ViewerOptions(
+        camera_pos=(1.5, 0, 0.8),
+        camera_lookat=(0.0, 0.0, 0.0),
+        camera_fov=40,
+    ),
+    fem_options=gs.options.FEMOptions(
+        dt=1e-4,  # Smaller timestep for explicit
+        damping=100.0,  # Higher damping to stabilize low friction
+        use_implicit_solver=False,  # Explicit is faster
+    ),
+    vis_options=gs.options.VisOptions(
+        show_world_frame=True,
+        visualize_mpm_boundary=False,
+    ),
+)
+
+########################## entities ##########################
+# Low friction ground plane
+scene.add_entity(
+    morph=gs.morphs.Plane(),
+    material=gs.materials.Rigid(
+        coup_friction=0.1,  # LOW FRICTION
+    ),
+)
+
+# FEM Muscle worm (tetrahedral mesh)
+worm = scene.add_entity(
+    morph=gs.morphs.Mesh(
+        file='meshes/worm/worm.obj',
+        pos=(0.3, 0.3, 0.05),  # Slightly higher for FEM
+        scale=0.1,
+        euler=(90, 0, 0),
+    ),
+    material=gs.materials.FEM.Muscle(
+        E=5e5,
+        nu=0.45,
+        rho=10000.0,
+        model='stable_neohookean',  # FEM uses stable_neohookean
+        n_groups=4,
+    ),
+)
+
+########################## add camera for recording ##########################
+cam = scene.add_camera(
+    pos=(1.5, 0, 0.8),
+    lookat=(0.3, 0.3, 0.0),
+    fov=40,
+)
+
+########################## build ##########################
+scene.build()
+
+########################## set muscle ##########################
+# Get element positions (FEM uses elements, not particles)
+pos = worm.get_state().pos[0, worm.get_el2v()].mean(dim=1)  # Average of element vertices
+n_units = worm.n_elements
+
+pos_max, pos_min = pos.max(dim=0).values, pos.min(dim=0).values
+pos_range = pos_max - pos_min
+
+lu_thresh, fh_thresh = 0.3, 0.6
+muscle_group = torch.zeros((n_units,), dtype=gs.tc_int, device=gs.device)
+mask_upper = pos[:, 2] > (pos_min[2] + pos_range[2] * lu_thresh)
+mask_fore = pos[:, 1] < (pos_min[1] + pos_range[1] * fh_thresh)
+muscle_group[mask_upper & mask_fore] = 0  # upper fore body
+muscle_group[mask_upper & ~mask_fore] = 1  # upper hind body
+muscle_group[~mask_upper & mask_fore] = 2  # lower fore body
+muscle_group[~mask_upper & ~mask_fore] = 3  # lower hind body
+
+# FEM requires per-element muscle direction
+muscle_direction = torch.tensor([[0.0, 1.0, 0.0]] * n_units, dtype=gs.tc_float, device=gs.device)
+
+worm.set_muscle(
+    muscle_group=muscle_group,
+    muscle_direction=muscle_direction,
+)
+
+########################## run and record video ##########################
+video_interval = 5
+cam.start_recording()
+
+scene.reset()
+for i in range(500):
+    actu = (0.0, 0.0, 0.0, 1.0 * (0.5 + math.sin(0.005 * math.pi * i)))
+    worm.set_actuation(actu)
+    scene.step()
+    
+    if i % video_interval == 0:
+        cam.render()
+
+########################## save video ##########################
+cam.stop_recording(save_to_filename='advanced_worm_fem.mp4', fps=30)
+print("Video saved to: advanced_worm_fem.mp4")

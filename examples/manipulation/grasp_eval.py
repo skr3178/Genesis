@@ -78,10 +78,10 @@ def main():
         help="Record stereo images as video during evaluation",
     )
     parser.add_argument(
-        "--video_path",
+        "--video_dir",
         type=str,
         default=None,
-        help="Path to save the video file (default: auto-generated)",
+        help="Directory to save videos (default: logs/{exp_name}_{stage}/recordings/)",
     )
     args = parser.parse_args()
 
@@ -115,7 +115,7 @@ def main():
         env_cfg=env_cfg,
         reward_cfg=reward_cfg,
         robot_cfg=robot_cfg,
-        show_viewer=True,
+        show_viewer=not args.record,  # Disable viewer when recording on headless machines
     )
 
     # Load the appropriate policy based on model type
@@ -128,6 +128,11 @@ def main():
     obs, _ = env.reset()
 
     max_sim_step = int(env_cfg["episode_length_s"] * env_cfg["max_visualize_FPS"])
+    
+    # When recording, ensure at least 11 seconds of video to capture full grasp and lift
+    if args.record:
+        min_steps_for_11s = int(11 * env_cfg["max_visualize_FPS"])  # 660 steps at 60 FPS
+        max_sim_step = max(max_sim_step, min_steps_for_11s)
 
     with torch.no_grad():
         if args.record:
@@ -150,12 +155,25 @@ def main():
                 env.vis_cam.render()  # render the visualization camera
 
             obs, rews, dones, infos = env.step(actions)
-        env.grasp_and_lift_demo()
+        env.grasp_and_lift_demo(record=args.record, vis_cam=env.vis_cam if args.record else None)
         if args.record:
             print("Stopping video recording...")
-            env.vis_cam.stop_recording(save_to_filename="video.mp4", fps=env_cfg["max_visualize_FPS"])
-            env.left_cam.stop_recording(save_to_filename="left_cam.mp4", fps=env_cfg["max_visualize_FPS"])
-            env.right_cam.stop_recording(save_to_filename="right_cam.mp4", fps=env_cfg["max_visualize_FPS"])
+            # Determine video save directory
+            if args.video_dir:
+                video_dir = Path(args.video_dir)
+            else:
+                video_dir = log_dir / "recordings"
+            video_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save videos with stage-appropriate names
+            vis_video_path = video_dir / f"{args.stage}_vis_cam.mp4"
+            left_video_path = video_dir / f"{args.stage}_left_cam.mp4"
+            right_video_path = video_dir / f"{args.stage}_right_cam.mp4"
+            
+            env.vis_cam.stop_recording(save_to_filename=str(vis_video_path), fps=env_cfg["max_visualize_FPS"])
+            env.left_cam.stop_recording(save_to_filename=str(left_video_path), fps=env_cfg["max_visualize_FPS"])
+            env.right_cam.stop_recording(save_to_filename=str(right_video_path), fps=env_cfg["max_visualize_FPS"])
+            print(f"Videos saved to: {video_dir}")
 
 
 if __name__ == "__main__":

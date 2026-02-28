@@ -72,6 +72,16 @@ class Go2Env:
             ),
         )
 
+        # add camera
+        if self.env_cfg.get("visualize_camera", False):
+            self.cam = self.scene.add_camera(
+                res=(640, 480),
+                pos=(2.5, 0.0, 1.5),
+                lookat=(0, 0, 0.5),
+                fov=40,
+                GUI=False,
+            )
+
         # build
         self.scene.build(n_envs=num_envs)
 

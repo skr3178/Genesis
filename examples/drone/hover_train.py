@@ -1,5 +1,24 @@
-import argparse
 import os
+import sys
+
+# Check if visualization is requested
+vis_requested = "-v" in sys.argv or "--vis" in sys.argv
+
+# Only use EGL for headless mode (no display available)
+# When using -v, we need the default GLX platform for GUI display
+if not vis_requested or not os.environ.get("DISPLAY"):
+    # Use EGL for headless/offscreen rendering with GPU acceleration
+    os.environ["PYOPENGL_PLATFORM"] = "egl"
+    
+    # Fix for PyOpenGL import order issue - monkey-patch _errors before GL is imported
+    class _FakeErrorsModule:
+        _error_checker = None
+    sys.modules["OpenGL.raw.GL._errors"] = _FakeErrorsModule()
+    
+    # Suppress MuJoco's GL platform check (it conflicts with EGL)
+    os.environ["MUJOCO_GL"] = "egl"
+
+import argparse
 import pickle
 import shutil
 from importlib import metadata
@@ -125,6 +144,16 @@ def main():
     parser.add_argument("--max_iterations", type=int, default=301)
     args = parser.parse_args()
 
+    # Check if display is available when visualization is requested
+    if args.vis and not os.environ.get("DISPLAY"):
+        print("=" * 60)
+        print("WARNING: No display detected!")
+        print("The -v/--vis flag requires a GUI display (X11 or Wayland).")
+        print("Running without visualization. To record a video instead, use:")
+        print("  python hover_eval.py -e <exp_name> --ckpt <checkpoint> --record")
+        print("=" * 60)
+        args.vis = False
+
     gs.init(backend=gs.gpu, precision="32", logging_level="warning", performance_mode=True)
 
     log_dir = f"logs/{args.exp_name}"
@@ -161,6 +190,12 @@ if __name__ == "__main__":
     main()
 
 """
-# training
+# training (headless)
 python examples/drone/hover_train.py
+
+# training with visualization (requires display/GUI)
+python examples/drone/hover_train.py -v
+
+# record video (headless, creates mp4 file)
+python examples/drone/hover_eval.py -e drone-hovering --ckpt 300 --record
 """

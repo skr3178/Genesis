@@ -1,5 +1,17 @@
-import argparse
 import os
+# Use EGL for headless/offscreen rendering with GPU acceleration
+os.environ["PYOPENGL_PLATFORM"] = "egl"
+
+# Fix for PyOpenGL import order issue - monkey-patch _errors before GL is imported
+import sys
+class _FakeErrorsModule:
+    _error_checker = None
+sys.modules["OpenGL.raw.GL._errors"] = _FakeErrorsModule()
+
+# Suppress MuJoCo's GL platform check (it conflicts with EGL)
+os.environ["MUJOCO_GL"] = "egl"
+
+import argparse
 import pickle
 from importlib import metadata
 
@@ -28,6 +40,9 @@ def main():
     parser.add_argument("--record", action="store_true", default=False)
     args = parser.parse_args()
 
+    # Get the directory containing this script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
     gs.init()
 
     log_dir = f"logs/{args.exp_name}"
@@ -47,7 +62,7 @@ def main():
         obs_cfg=obs_cfg,
         reward_cfg=reward_cfg,
         command_cfg=command_cfg,
-        show_viewer=True,
+        show_viewer=not args.record,
     )
 
     runner = OnPolicyRunner(env, train_cfg, log_dir, device=gs.device)
@@ -65,7 +80,8 @@ def main():
                 actions = policy(obs)
                 obs, rews, dones, infos = env.step(actions)
                 env.cam.render()
-            env.cam.stop_recording(save_to_filename="video.mp4", fps=env_cfg["max_visualize_FPS"])
+            video_path = os.path.join(script_dir, "drone_video.mp4")
+            env.cam.stop_recording(save_to_filename=video_path, fps=env_cfg["max_visualize_FPS"])
         else:
             for _ in range(max_sim_step):
                 actions = policy(obs)

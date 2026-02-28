@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+<robot name="cartpole">
+  <!-- 
+    Cartpole Model based on BulletPhysics cartpole
+    - Cart: slides along x-axis (prismatic joint)
+    - Pole: rotates around y-axis (revolute joint)
+  -->
+
+  <link name="world"/>
+
+  <!-- Track/Cart link (sliding) -->
+  <link name="cart">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1.0"/>
+      <inertia ixx="0.1" ixy="0" ixz="0" iyy="0.1" iyz="0" izz="0.1"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.2 0.15 0.1"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0.2 0.4 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.2 0.15 0.1"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Pole link (rotating) -->
+  <link name="pole">
+    <inertial>
+      <origin xyz="0 0 0.5" rpy="0 0 0"/>
+      <mass value="0.1"/>
+      <inertia ixx="0.0084" ixy="0" ixz="0" iyy="0.0084" iyz="0" izz="0.0001"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0.5" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.02" length="1.0"/>
+      </geometry>
+      <material name="red">
+        <color rgba="0.9 0.2 0.2 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.5" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.02" length="1.0"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Prismatic joint: cart slides on world -->
+  <joint name="slider_to_cart" type="prismatic">
+    <parent link="world"/>
+    <child link="cart"/>
+    <origin xyz="0 0 0.1" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="100" velocity="10" lower="-2.4" upper="2.4"/>
+  </joint>
+
+  <!-- Revolute joint: pole rotates on cart -->
+  <joint name="cart_to_pole" type="continuous">
+    <parent link="cart"/>
+    <child link="pole"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+</robot>
